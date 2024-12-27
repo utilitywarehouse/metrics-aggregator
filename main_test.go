@@ -44,10 +44,10 @@ func TestAggregateMetricss(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                 string
-		withOutLabels        []string
-		wantAggregatedLabels map[string]map[string]string
-		wantAggregatedValues map[string]float64
+		name                   string
+		aggregateWithOutLabels []string
+		wantAggregatedLabels   map[string]map[string]string
+		wantAggregatedValues   map[string]float64
 	}{
 		{
 			"no-matching-labels",
@@ -114,7 +114,7 @@ func TestAggregateMetricss(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			aggregatedLabels, aggregatedValues := aggregateMetrics(metrics, tt.withOutLabels)
+			aggregatedLabels, aggregatedValues := aggregateMetrics(metrics, tt.aggregateWithOutLabels)
 
 			if diff := cmp.Diff(aggregatedLabels, tt.wantAggregatedLabels, cmpopts.IgnoreUnexported(dto.LabelPair{})); diff != "" {
 				t.Errorf("filteredLabels mismatch (-want +got):\n%s", diff)
@@ -151,9 +151,9 @@ component_received_event_bytes_total{l1="v1",l2="v2",l3="v3"} 3000 1735054866000
 	defer ts.Close()
 
 	tests := []struct {
-		name          string
-		withOutLabels []string
-		want          string
+		name                   string
+		aggregateWithOutLabels []string
+		want                   string
 	}{
 		{
 			"no-matching-labels",
@@ -227,8 +227,8 @@ component_received_events_total{l1="v1"} 60
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			collector := &RemoteAggregator{
-				url:           ts.URL,
-				withOutLabels: tt.withOutLabels,
+				url:                    ts.URL,
+				aggregateWithOutLabels: tt.aggregateWithOutLabels,
 			}
 
 			reg := prometheus.NewPedanticRegistry()

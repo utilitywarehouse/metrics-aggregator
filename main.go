@@ -1,13 +1,14 @@
 package main
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"maps"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -15,10 +16,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	"github.com/urfave/cli/v3"
 )
 
 var (
-	log *slog.Logger
+	log = slog.New(slog.NewTextHandler(
+		os.Stderr,
+		&slog.HandlerOptions{
+			Level: slog.LevelInfo,
+		},
+	))
 
 	pcDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "metrics_aggregation_duration_seconds",
@@ -26,11 +33,47 @@ var (
 	},
 		[]string{"remote"},
 	)
+
+	flags = []cli.Flag{
+		&cli.StringFlag{
+			Name:  "metrics-bind-address",
+			Value: ":9090",
+			Usage: "The address the metric endpoint binds to.",
+		},
+		&cli.StringFlag{
+			Name:  "metrics-path",
+			Value: "/metrics",
+			Usage: "The path under which to expose metrics.",
+		},
+		&cli.StringFlag{
+			Name:     "target-url",
+			Usage:    "The remote target metrics url to scrap metrics.",
+			Required: true,
+		},
+		&cli.StringSliceFlag{
+			Name:     "aggregate-without-label",
+			Usage:    "The metrics will be aggregated over all label except listed labels. Labels will be removed from the result vector, while all other labels are preserved in the output.",
+			Required: true,
+		},
+		&cli.StringSliceFlag{
+			Name:  "include-metric",
+			Usage: "The name of the scrapped metrics which will be aggregated and exported. if its not set all metrics will be exported from target.",
+		},
+		&cli.StringFlag{
+			Name:  "add-prefix",
+			Usage: "The prefix which will be added to all exported metrics name.",
+		},
+		&cli.StringSliceFlag{
+			Name:  "add-labelValue",
+			Usage: "The list of key=value pairs which will be added to all exported metrics.",
+		},
+	}
 )
 
 type RemoteAggregator struct {
-	url           string
-	withOutLabels []string
+	url                    string
+	includeMetrics         []string
+	aggregateWithOutLabels []string
 
 	addPrefix string
 	addLabels map[string]string
@@ -72,24 +115,27 @@ func (ra *RemoteAggregator) decodeAndSend(reader io.Reader, ch chan<- prometheus
 			break
 		}
 
-		ra.aggregateAndSend(&metricFamily, ch)
+		ra.processAndSend(&metricFamily, ch)
 	}
 }
 
-func (ra *RemoteAggregator) aggregateAndSend(metricFamily *dto.MetricFamily, ch chan<- prometheus.Metric) {
+func (ra *RemoteAggregator) processAndSend(metricFamily *dto.MetricFamily, ch chan<- prometheus.Metric) {
 
-	aggregatedLabels, aggregatedValue := aggregateMetrics(metricFamily.Metric, ra.withOutLabels)
+	name := metricFamily.GetName()
+	// if includeMetrics is set filter metrics based on name
+	if len(ra.includeMetrics) > 0 && !slices.Contains(ra.includeMetrics, name) {
+		return
+	}
+
+	if ra.addPrefix != "" {
+		name = ra.addPrefix + name
+	}
+
+	aggregatedLabels, aggregatedValue := aggregateMetrics(metricFamily.Metric, ra.aggregateWithOutLabels)
 
 	for key, value := range aggregatedValue {
-
 		var promMetric prometheus.Metric
 		var err error
-
-		// modify name and labels if required
-		name := metricFamily.GetName()
-		if ra.addPrefix != "" {
-			name = ra.addPrefix + name
-		}
 
 		maps.Copy(aggregatedLabels[key], ra.addLabels)
 
@@ -114,24 +160,22 @@ func (ra *RemoteAggregator) aggregateAndSend(metricFamily *dto.MetricFamily, ch 
 }
 
 // aggregateMetrics returns aggregated values and label pairs map on same key
-func aggregateMetrics(metrics []*dto.Metric, withOutLabels []string) (map[string]map[string]string, map[string]float64) {
-	ignoredSet := make(map[string]struct{}, len(withOutLabels))
-	for _, label := range withOutLabels {
-		ignoredSet[label] = struct{}{}
-	}
-
+func aggregateMetrics(metrics []*dto.Metric, aggregateWithOutLabels []string) (map[string]map[string]string, map[string]float64) {
 	aggregatedValue := make(map[string]float64)
 	aggregatedLabels := make(map[string]map[string]string)
 
 	for _, metric := range metrics {
+
+		var key string
 		filteredLabels := make(map[string]string)
-		key := ""
+
 		for _, label := range metric.Label {
-			if _, found := ignoredSet[label.GetName()]; !found {
+			if !slices.Contains(aggregateWithOutLabels, label.GetName()) {
 				filteredLabels[label.GetName()] = label.GetValue()
 				key += label.GetName() + "=" + label.GetValue() + ","
 			}
 		}
+
 		aggregatedLabels[key] = filteredLabels
 
 		if metric.GetGauge() != nil {
@@ -147,75 +191,47 @@ func updateRunTime(remoteURL string, start time.Time) {
 	pcDuration.WithLabelValues(remoteURL).Observe(time.Since(start).Seconds())
 }
 
-func usage() {
-	fmt.Fprintf(os.Stderr, "NAME:\n")
-	fmt.Fprintf(os.Stderr, "\tmetrics-aggregator\n")
-
-	fmt.Fprintf(os.Stderr, "DESCRIPTION:\n")
-	fmt.Fprintf(os.Stderr, "\tA metrics aggregator to aggregate metrics without given labels.\n")
-
-	fmt.Fprintf(os.Stderr, "OPTIONS:\n")
-	fmt.Fprintf(os.Stderr, "\t--listen-address           (default: :9000)\n")
-	fmt.Fprintf(os.Stderr, "\t--metrics-path             (default: /metrics)\n")
-	fmt.Fprintf(os.Stderr, "\t--target-url               (default: 'http://localhost:8080/metrics')\n")
-	fmt.Fprintf(os.Stderr, "\t--aggregate-without-label  (default: '')\n")
-	fmt.Fprintf(os.Stderr, "\t--add-prefix               (default: '')\n")
-	fmt.Fprintf(os.Stderr, "\t--add-labels               (default: '')\n")
-	os.Exit(2)
-}
-
 func main() {
-	port := flag.String("listen-address", ":9000", "address the metrics server binds to")
-	metricPath := flag.String("metrics-path", "/metrics", "path under which to expose metrics")
-	targetURL := flag.String("target-url", "http://localhost:8090/metrics", "remote target url to scrap metrics")
-	withOutLabels := flag.String("aggregate-without-labels", "", "comma separated names of the labels which are removed from the aggregated metrics")
-	addPrefix := flag.String("add-prefix", "", "given prefix will be added to all metrics name")
-	addLabels := flag.String("add-labels", "", "comma separated list of key=value pairs which will be added to all metrics")
+	cmd := &cli.Command{
+		Name:  "metrics-aggregator",
+		Usage: "ggregate metrics to reduce cardinality by removing labels",
+		Flags: flags,
+		Action: func(ctx context.Context, cmd *cli.Command) error {
 
-	flag.Usage = usage
-	flag.Parse()
+			collector := &RemoteAggregator{
+				url:                    cmd.String("target-url"),
+				includeMetrics:         cmd.StringSlice("include-metric"),
+				aggregateWithOutLabels: cmd.StringSlice("aggregate-without-label"),
+				addPrefix:              cmd.String("add-prefix"),
+				addLabels:              make(map[string]string),
+			}
 
-	log = slog.New(slog.NewTextHandler(
-		os.Stderr,
-		&slog.HandlerOptions{
-			Level: slog.LevelInfo,
+			for _, pair := range cmd.StringSlice("add-labelValue") {
+				kv := strings.Split(pair, "=")
+				if len(kv) == 2 {
+					collector.addLabels[kv[0]] = kv[1]
+				}
+			}
+
+			reg := prometheus.NewPedanticRegistry()
+
+			reg.MustRegister(collector, pcDuration)
+
+			log.Info("starting server", "port", cmd.String("metrics-bind-address"), "metrics", cmd.String("metrics-path"))
+
+			http.Handle(cmd.String("metrics-path"), promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+
+			if err := http.ListenAndServe(cmd.String("metrics-bind-address"), nil); err != nil {
+				return fmt.Errorf("error starting HTTP server %w", err)
+			}
+
+			return nil
 		},
-	))
+	}
 
-	log = slog.Default()
-
-	if withOutLabels == nil || *withOutLabels == "" {
-		log.Error("'aggregate-without-labels' is required!")
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		log.Error("error running app", "err", err)
 		os.Exit(1)
 	}
 
-	collector := &RemoteAggregator{
-		url:           *targetURL,
-		withOutLabels: strings.Split(*withOutLabels, ","),
-		addPrefix:     *addPrefix,
-		addLabels:     make(map[string]string),
-	}
-
-	for _, pair := range strings.Split(*addLabels, ",") {
-		if pair == "" {
-			continue
-		}
-		kv := strings.Split(pair, "=")
-		if len(kv) == 2 {
-			collector.addLabels[kv[0]] = kv[1]
-		}
-	}
-
-	reg := prometheus.NewPedanticRegistry()
-
-	reg.MustRegister(collector, pcDuration)
-
-	log.Info("starting server", "port", *port, "metrics", *metricPath)
-
-	http.Handle(*metricPath, promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
-
-	if err := http.ListenAndServe(*port, nil); err != nil {
-		log.Error("error starting HTTP server", "err", err)
-		os.Exit(1)
-	}
 }
