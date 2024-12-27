@@ -197,8 +197,13 @@ func main() {
 	}
 
 	for _, pair := range strings.Split(*addLabels, ",") {
+		if pair == "" {
+			continue
+		}
 		kv := strings.Split(pair, "=")
-		collector.addLabels[kv[0]] = kv[1]
+		if len(kv) == 2 {
+			collector.addLabels[kv[0]] = kv[1]
+		}
 	}
 
 	reg := prometheus.NewPedanticRegistry()
