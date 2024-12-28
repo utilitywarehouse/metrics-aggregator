@@ -130,7 +130,11 @@ func (ra *RemoteAggregator) processAndSend(metricFamily *dto.MetricFamily, ch ch
 	if ra.addPrefix != "" {
 		name = ra.addPrefix + name
 	}
-
+	// assuming all metrics of same family will have same timestamp
+	ct := time.Now()
+	if len(metricFamily.Metric) > 0 && metricFamily.Metric[0].TimestampMs != nil {
+		ct = time.UnixMilli(*metricFamily.Metric[0].TimestampMs)
+	}
 	aggregatedLabels, aggregatedValue := aggregateMetrics(metricFamily.Metric, ra.aggregateWithOutLabels)
 
 	for key, value := range aggregatedValue {
@@ -155,7 +159,7 @@ func (ra *RemoteAggregator) processAndSend(metricFamily *dto.MetricFamily, ch ch
 			continue
 		}
 
-		ch <- promMetric
+		ch <- prometheus.NewMetricWithTimestamp(ct, promMetric)
 	}
 }
 
