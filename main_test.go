@@ -135,13 +135,13 @@ func Test_Collector(t *testing.T) {
 # HELP component_received_events_total component_received_events_total
 # TYPE component_received_events_total counter
 component_received_events_total{l1="v1"} 10 1735054883000
-component_received_events_total{l1="v1",l2="v2"} 20 1735054879000
-component_received_events_total{l1="v1",l2="v2",l3="v3"} 30 1735054866000
+component_received_events_total{l1="v1",l2="v2"} 20 1735054883000
+component_received_events_total{l1="v1",l2="v2",l3="v3"} 30 1735054883000
 # HELP component_received_event_bytes_total component_received_event_bytes_total
 # TYPE component_received_event_bytes_total counter
-component_received_event_bytes_total{l1="v1"} 1000 1735054883000
+component_received_event_bytes_total{l1="v1"} 1000 1735054879000
 component_received_event_bytes_total{l1="v1",l2="v2"} 2000 1735054879000
-component_received_event_bytes_total{l1="v1",l2="v2",l3="v3"} 3000 1735054866000
+component_received_event_bytes_total{l1="v1",l2="v2",l3="v3"} 3000 1735054879000
 `
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -160,14 +160,14 @@ component_received_event_bytes_total{l1="v1",l2="v2",l3="v3"} 3000 1735054866000
 			[]string{"l4"},
 			`# HELP component_received_event_bytes_total component_received_event_bytes_total
 # TYPE component_received_event_bytes_total counter
-component_received_event_bytes_total{l1="v1"} 1000
-component_received_event_bytes_total{l1="v1",l2="v2"} 2000
-component_received_event_bytes_total{l1="v1",l2="v2",l3="v3"} 3000
+component_received_event_bytes_total{l1="v1"} 1000 1735054879000
+component_received_event_bytes_total{l1="v1",l2="v2"} 2000 1735054879000
+component_received_event_bytes_total{l1="v1",l2="v2",l3="v3"} 3000 1735054879000
 # HELP component_received_events_total component_received_events_total
 # TYPE component_received_events_total counter
-component_received_events_total{l1="v1"} 10
-component_received_events_total{l1="v1",l2="v2"} 20
-component_received_events_total{l1="v1",l2="v2",l3="v3"} 30
+component_received_events_total{l1="v1"} 10 1735054883000
+component_received_events_total{l1="v1",l2="v2"} 20 1735054883000
+component_received_events_total{l1="v1",l2="v2",l3="v3"} 30 1735054883000
 `,
 		},
 		{
@@ -175,12 +175,12 @@ component_received_events_total{l1="v1",l2="v2",l3="v3"} 30
 			[]string{"l3"},
 			`# HELP component_received_event_bytes_total component_received_event_bytes_total
 # TYPE component_received_event_bytes_total counter
-component_received_event_bytes_total{l1="v1"} 1000
-component_received_event_bytes_total{l1="v1",l2="v2"} 5000
+component_received_event_bytes_total{l1="v1"} 1000 1735054879000
+component_received_event_bytes_total{l1="v1",l2="v2"} 5000 1735054879000
 # HELP component_received_events_total component_received_events_total
 # TYPE component_received_events_total counter
-component_received_events_total{l1="v1"} 10
-component_received_events_total{l1="v1",l2="v2"} 50
+component_received_events_total{l1="v1"} 10 1735054883000
+component_received_events_total{l1="v1",l2="v2"} 50 1735054883000
 `,
 		},
 		{
@@ -188,12 +188,12 @@ component_received_events_total{l1="v1",l2="v2"} 50
 			[]string{"l2"},
 			`# HELP component_received_event_bytes_total component_received_event_bytes_total
 # TYPE component_received_event_bytes_total counter
-component_received_event_bytes_total{l1="v1"} 3000
-component_received_event_bytes_total{l1="v1",l3="v3"} 3000
+component_received_event_bytes_total{l1="v1"} 3000 1735054879000
+component_received_event_bytes_total{l1="v1",l3="v3"} 3000 1735054879000
 # HELP component_received_events_total component_received_events_total
 # TYPE component_received_events_total counter
-component_received_events_total{l1="v1"} 30
-component_received_events_total{l1="v1",l3="v3"} 30
+component_received_events_total{l1="v1"} 30 1735054883000
+component_received_events_total{l1="v1",l3="v3"} 30 1735054883000
 `,
 		},
 		{
@@ -201,14 +201,14 @@ component_received_events_total{l1="v1",l3="v3"} 30
 			[]string{"l1"},
 			`# HELP component_received_event_bytes_total component_received_event_bytes_total
 # TYPE component_received_event_bytes_total counter
-component_received_event_bytes_total 1000
-component_received_event_bytes_total{l2="v2"} 2000
-component_received_event_bytes_total{l2="v2",l3="v3"} 3000
+component_received_event_bytes_total 1000 1735054879000
+component_received_event_bytes_total{l2="v2"} 2000 1735054879000
+component_received_event_bytes_total{l2="v2",l3="v3"} 3000 1735054879000
 # HELP component_received_events_total component_received_events_total
 # TYPE component_received_events_total counter
-component_received_events_total 10
-component_received_events_total{l2="v2"} 20
-component_received_events_total{l2="v2",l3="v3"} 30
+component_received_events_total 10 1735054883000
+component_received_events_total{l2="v2"} 20 1735054883000
+component_received_events_total{l2="v2",l3="v3"} 30 1735054883000
 `,
 		},
 		{
@@ -216,10 +216,10 @@ component_received_events_total{l2="v2",l3="v3"} 30
 			[]string{"l2", "l3"},
 			`# HELP component_received_event_bytes_total component_received_event_bytes_total
 # TYPE component_received_event_bytes_total counter
-component_received_event_bytes_total{l1="v1"} 6000
+component_received_event_bytes_total{l1="v1"} 6000 1735054879000
 # HELP component_received_events_total component_received_events_total
 # TYPE component_received_events_total counter
-component_received_events_total{l1="v1"} 60
+component_received_events_total{l1="v1"} 60 1735054883000
 `,
 		},
 	}
