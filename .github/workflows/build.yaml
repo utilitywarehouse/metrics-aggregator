@@ -15,7 +15,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  docker:
+  build:
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     steps:

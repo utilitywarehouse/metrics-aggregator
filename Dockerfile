@@ -14,8 +14,7 @@ RUN go mod download
 # Copy the go source
 COPY . .
 
-RUN \
- go test -v -cover ./... && \
+RUN go test -v -cover ./... && \
     CGO_ENABLED=0 go build -a -o metrics-aggregator
 
 FROM alpine:3.20
