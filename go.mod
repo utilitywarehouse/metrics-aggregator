@@ -3,7 +3,7 @@ module github.com/utilitywarehouse/metrics-aggregator
 go 1.23.0
 require (
 	github.com/google/go-cmp v0.7.0
-	github.com/prometheus/client_golang v1.21.0
+	github.com/prometheus/client_golang v1.21.1
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.62.0
 	github.com/urfave/cli/v3 v3.0.0-beta1
